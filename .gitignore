@@ -1,0 +1,7 @@
+*.rsl
+.vscode
+node_modules
+package-lock.json
+yarn.lock
+*.sqlite
+test.js
