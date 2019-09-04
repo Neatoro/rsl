@@ -18,7 +18,7 @@ class Token {
 const tokenTypes = {
     type: 'TYPE',
     route: 'ROUTE',
-    routeLiteral: 'ROUTE_LITERAL',
+    routeLiteral: 'ROUTE LITERAL',
     id: 'ID',
     curlyOpen: 'CURLY OPEN',
     curlyClose: 'CURLY CLOSE',
