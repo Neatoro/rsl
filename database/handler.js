@@ -181,7 +181,7 @@ module.exports = class DatabaseHandler {
         return _.findIndex(typeDefinition.properties, { name: property }) >= 0;
     }
 
-    async get(typeDefinition, id, expands = []) {
+    async get({ typeDefinition, id, expands = [] }) {
         return await this.list({
             typeDefinition,
             filters: [`id=${id}`],

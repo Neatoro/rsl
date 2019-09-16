@@ -7,14 +7,14 @@ function getExpand(query) {
     return [];
 }
 
-module.exports = function(typeDefinition, databaseHandler) {
+module.exports = function(typeDefinition, app) {
     return async function(request, response) {
         const id = parseInt(_.last(request.path.split('/')));
-        const expand = getExpand(request.query);
+        const expands = getExpand(request.query);
 
-        const entry = await databaseHandler.get(typeDefinition, id, expand);
-        if (entry.length > 0) {
-            response.status(200).json(entry[0]);
+        const entry = await app.service(typeDefinition.name).get({ id: id, expands });
+        if (!_.isUndefined(entry)) {
+            response.status(200).json(entry);
         } else {
             response.sendStatus(404);
         }

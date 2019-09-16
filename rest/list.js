@@ -1,5 +1,4 @@
 const _ = require('lodash');
-const { toKebapCase } = require('../util');
 
 function getFilters(query) {
     if (!_.isUndefined(query.filter)) {
@@ -15,12 +14,12 @@ function getExpand(query) {
     return [];
 }
 
-module.exports = function(typeDefinition, databaseHandler) {
+module.exports = function(typeDefinition, app) {
     return async function(request, response) {
         const filters = getFilters(request.query);
         const expands = getExpand(request.query);
 
-        const result = await databaseHandler.list({
+        const result = await app.service(typeDefinition.name).list({
             typeDefinition,
             filters,
             expands,
@@ -28,9 +27,6 @@ module.exports = function(typeDefinition, databaseHandler) {
             offset: request.query.offset
         });
 
-        response.json({
-            done: result.length === 0,
-            [toKebapCase(typeDefinition.name)]: result
-        });
+        response.json(result);
     };
 };

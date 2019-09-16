@@ -1,19 +1,23 @@
-const create = require('./rest/create');
+const _ = require('lodash');
 const DatabaseHandler = require('./database/handler');
 const express = require('express');
-const get = require('./rest/get');
-const list = require('./rest/list');
 const { parse } = require('./compiler/parser');
+const restCreate = require('./rest/create');
 const restDelete = require('./rest/delete');
+const restGet = require('./rest/get');
+const restList = require('./rest/list');
+const restUpdate = require('./rest/update');
+const serviceGet = require('./services/get');
+const serviceList = require('./services/list');
 const { toKebapCase } = require('./util');
 const { tokenize } = require('./compiler/tokenizer');
-const update = require('./rest/update');
 
 module.exports = class RSL {
     constructor({ client, connection }) {
         this._app = express();
         this._app.use(express.json());
         this.database = new DatabaseHandler({ client, connection });
+        this._services = {};
     }
 
     define(definition) {
@@ -21,19 +25,34 @@ module.exports = class RSL {
         const { typeDefinitions, route } = parse(tokens);
         this.database.createTablesForTypes(typeDefinitions);
         for (const typeDefinition of typeDefinitions) {
+            this._defineService(typeDefinition);
             this._defineRoutes(typeDefinition, route);
         }
+    }
+
+    _defineService(typeDefinition) {
+        this._services[typeDefinition.name] = {
+            list: serviceList(typeDefinition, this.database),
+            get: serviceGet(typeDefinition, this.database)
+        };
+    }
+
+    service(name) {
+        if (_.isUndefined(this._services[name])) {
+            throw `Unknown service ${name}`;
+        }
+        return this._services[name];
     }
 
     _defineRoutes(typeDefinition, route) {
         const serviceName = toKebapCase(typeDefinition.name);
         const router = new express.Router();
 
-        router.get(`/${serviceName}`, list(typeDefinition, this.database));
-        router.post(`/${serviceName}`, create(typeDefinition, this.database));
-        router.get(`/${serviceName}/:id`, get(typeDefinition, this.database));
+        router.get(`/${serviceName}`, restList(typeDefinition, this));
+        router.post(`/${serviceName}`, restCreate(typeDefinition, this.database));
+        router.get(`/${serviceName}/:id`, restGet(typeDefinition, this));
         router.delete(`/${serviceName}/:id`, restDelete(typeDefinition, this.database));
-        router.put(`/${serviceName}/:id`, update(typeDefinition, this.database));
+        router.put(`/${serviceName}/:id`, restUpdate(typeDefinition, this.database));
 
         this._app.use(route, router);
     }
