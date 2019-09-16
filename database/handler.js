@@ -200,14 +200,12 @@ module.exports = class DatabaseHandler {
 
         const arrayKeys = _.keys(arraysData);
         for (const arrayKey of arrayKeys) {
-            const mappedArrayData = _.map(arraysData[arrayKey], (data) => ({
-                [typeDefinition.name]: id,
-                value: data
-            }));
-
-            if (mappedArrayData.length > 0) {
-                await this.k(`${typeDefinition.name}_${arrayKey}`).insert(mappedArrayData);
-            }
+            await this._insertArrayData({
+                typeDefinition,
+                arrayKey,
+                arrayData: arraysData[arrayKey],
+                id
+            });
         }
 
         return result;
@@ -219,7 +217,24 @@ module.exports = class DatabaseHandler {
 
     async update(typeDefinition, id, data) {
         const databaseData = this._removeUnneededDataAttributes(typeDefinition, data);
-        await this.k(typeDefinition.name).update(databaseData).where('id', id);
+
+        const withoutArraysData = this._removeArrayDataAttributes(typeDefinition, databaseData);
+        const arraysData = this._removeNonArrayDataAttributes(typeDefinition, databaseData);
+
+        await this.k(typeDefinition.name).update(withoutArraysData).where('id', id);
+
+        const arrayKeys = _.keys(arraysData);
+        for (const arrayKey of arrayKeys) {
+            await this.k(`${typeDefinition.name}_${arrayKey}`).where(typeDefinition.name, id).del();
+
+            await this._insertArrayData({
+                typeDefinition,
+                arrayKey,
+                arrayData: arraysData[arrayKey],
+                id
+            });
+        }
+
         return [id];
     }
 
@@ -244,6 +259,17 @@ module.exports = class DatabaseHandler {
             .value();
 
         return _.pick(data, properties);
+    }
+
+    async _insertArrayData({ typeDefinition, arrayKey, arrayData, id }) {
+        const mappedArrayData = _.map(arrayData, (data) => ({
+            [typeDefinition.name]: id,
+            value: data
+        }));
+
+        if (mappedArrayData.length > 0) {
+            await this.k(`${typeDefinition.name}_${arrayKey}`).insert(mappedArrayData);
+        }
     }
 
     _collectDependencies(typeDefinition) {
