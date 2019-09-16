@@ -2,14 +2,7 @@ const _ = require('lodash');
 const expandedQuery = require('./expandedQuery');
 const filteredQuery = require('./filteredQuery');
 const knex = require('knex');
-
-const typeMapping = {
-    'String': 'string',
-    'Integer': 'integer',
-    'Float': 'float',
-    'Boolean': 'boolean',
-    'Date': 'date'
-};
+const { typeMapping } = require('../util');
 
 function isNativeType(typeName) {
     return _(typeMapping).keys().includes(typeName);

@@ -9,11 +9,12 @@ module.exports = {
         'String': 'string',
         'Integer': 'integer',
         'Float': 'float',
-        'Boolean': 'boolean'
+        'Boolean': 'boolean',
+        'Text': 'text',
+        'Date': 'date'
     },
 
     isNativeType(typeName) {
         return _(this.typeMapping).keys().includes(typeName);
     }
-
-}
+};

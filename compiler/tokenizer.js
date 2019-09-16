@@ -29,6 +29,7 @@ const tokenTypes = {
     integer: 'INTEGER',
     float: 'FLOAT',
     boolean: 'BOOLEAN',
+    text: 'TEXT',
     date: 'DATE'
 };
 
@@ -96,6 +97,11 @@ const tokenMatchers = [
     {
         type: tokenTypes.boolean,
         regex: /Boolean/,
+        level: 0
+    },
+    {
+        type: tokenTypes.text,
+        regex: /Text/,
         level: 0
     },
     {

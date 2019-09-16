@@ -24,6 +24,7 @@ const typeValidators = {
     'Integer': _.isInteger,
     'Float': _.isNumber,
     'String': _.isString,
+    'Text': _.isString,
     'Boolean': _.isBoolean,
     'Date': isDate
 };

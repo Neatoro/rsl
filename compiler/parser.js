@@ -114,6 +114,7 @@ class Parser {
             tokenTypes.string,
             tokenTypes.boolean,
             tokenTypes.id,
+            tokenTypes.text,
             tokenTypes.date
         );
 
