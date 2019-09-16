@@ -1,16 +1,16 @@
 {
   "name": "rsl",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "description": "A language compiler for generating rest services and database connections",
   "main": "index.js",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.17.1",
+    "express": "4.17.1",
     "knex": "0.19.2",
     "lodash": "4.17.15"
   },
   "devDependencies": {
-    "jest": "^24.9.0"
+    "jest": "24.9.0"
   },
   "scripts": {
     "test": "jest"

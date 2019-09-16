@@ -34,12 +34,24 @@ class TypeNode {
     async resolve(resolver) {
         if (!this._resolved) {
             for (const property of this.properties) {
-                if (!_.isString(property.type) && property.type.name !== this.name) {
+                if (_.isArray(property.type)) {
+                    this._resolveArrayDependency(property, resolver);
+                } else if (this._isDependency(property.type)) {
                     await property.type.resolve(resolver);
                 }
             }
             resolver(this);
             this._resolved = true;
+        }
+    }
+
+    _isDependency(type) {
+        return !_.isString(type) && type.name !== this.name;
+    }
+
+    async _resolveArrayDependency(property, resolver) {
+        if (this._isDependency(property.type[0])) {
+            await property.type[0].resolve(resolver);
         }
     }
 }
@@ -82,7 +94,11 @@ module.exports = class DatabaseHandler {
                 return !isNativeType(property.type);
             })
             .forEach((property) => {
-                property.type = this.types[property.type];
+                if (!_.isArray(property.type)) {
+                    property.type = this.types[property.type];
+                } else {
+                    property.type = isNativeType(property.type[0]) ? property.type : [this.types[property.type[0]]];
+                }
             });
 
         for (const type of _.values(this.types)) {
@@ -94,17 +110,32 @@ module.exports = class DatabaseHandler {
         typeDefinition = this.types[typeDefinition.name];
         const selectFields = [
             `${typeDefinition.name}.id`,
-            ..._.map(typeDefinition.properties, (property) => `${typeDefinition.name}.${property.name}`)
+            ..._(typeDefinition.properties)
+                .filter((property) => !_.isArray(property.type))
+                .map((property) => `${typeDefinition.name}.${property.name}`).value()
         ];
 
-        const query = expandedQuery({
-            query: this.k(typeDefinition.name).select(selectFields),
+        let baseQuery = this.k(typeDefinition.name).select(selectFields);
+
+        const arrayFields = _.filter(typeDefinition.properties, (property) => _.isArray(property.type));
+        for (const arrayField of arrayFields) {
+            baseQuery = baseQuery
+                .select(`${typeDefinition.name}_${arrayField.name}.value as ${arrayField.name}`)
+                .join(
+                    `${typeDefinition.name}_${arrayField.name}`,
+                    `${typeDefinition.name}.id`,
+                    `${typeDefinition.name}_${arrayField.name}.${typeDefinition.name}`
+                );
+        }
+
+        const queryWithExpands = expandedQuery({
+            query: baseQuery,
             requestedType: typeDefinition,
             expands
         });
 
         const queryWithFilter = filteredQuery({
-            query,
+            query: queryWithExpands,
             requestedType: typeDefinition,
             filters
         });
@@ -113,13 +144,31 @@ module.exports = class DatabaseHandler {
         const transformedResults = _.map(
             results,
             (result) => _.reduce(
-                query.transformFunctions,
+                queryWithExpands.transformFunctions,
                 (acc, func) => func(acc),
                 result
             )
         );
 
-        return transformedResults;
+        const keys = _.map(arrayFields, (field) => field.name);
+        const groupedResults = _.groupBy(transformedResults, 'id');
+
+        const fullResults = _.mapValues(
+            groupedResults,
+            (group) => {
+                const preparedArrays = _.reduce(keys, (acc, el) => ({ ...acc, [el]: [] }), {});
+                return _.reduce(
+                    group,
+                    (acc, el) => {
+                        _.forEach(keys, (key) => acc[key].push(el[key]));
+                        return acc;
+                    },
+                    { ..._.head(group), ...preparedArrays }
+                );
+            }
+        );
+
+        return _.values(fullResults);
     }
 
     _hasProperty(typeDefinition, property) {
@@ -132,7 +181,24 @@ module.exports = class DatabaseHandler {
 
     async insert(typeDefinition, data) {
         const databaseData = this._removeUnneededDataAttributes(typeDefinition, data);
-        return await this.k(typeDefinition.name).insert(databaseData).returning('id');
+
+        const withoutArraysData = this._removeArrayDataAttributes(typeDefinition, databaseData);
+        const arraysData = this._removeNonArrayDataAttributes(typeDefinition, databaseData);
+
+        const result = await this.k(typeDefinition.name).insert(withoutArraysData).returning('id');
+        const id = result[0];
+
+        const arrayKeys = _.keys(arraysData);
+        for (const arrayKey of arrayKeys) {
+            const mappedArrayData = _.map(arraysData[arrayKey], (data) => ({
+                [typeDefinition.name]: id,
+                value: data
+            }));
+
+            await this.k(`${typeDefinition.name}_${arrayKey}`).insert(mappedArrayData);
+        }
+
+        return result;
     }
 
     async delete(typeDefinition, id) {
@@ -150,6 +216,24 @@ module.exports = class DatabaseHandler {
         return _.pick(data, properties);
     }
 
+    _removeArrayDataAttributes(typeDefinition, data) {
+        const properties = _(typeDefinition.properties)
+            .filter((property) => !_.isArray(property.type))
+            .map((property) => property.name)
+            .value();
+
+        return _.pick(data, properties);
+    }
+
+    _removeNonArrayDataAttributes(typeDefinition, data) {
+        const properties = _(typeDefinition.properties)
+            .filter((property) => _.isArray(property.type))
+            .map((property) => property.name)
+            .value();
+
+        return _.pick(data, properties);
+    }
+
     _collectDependencies(typeDefinition) {
         const dependencies = [];
         for (const property of typeDefinition.properties) {
@@ -162,12 +246,20 @@ module.exports = class DatabaseHandler {
 
     async _createTableForType(typeDefinition) {
         if (!await this.k.schema.hasTable(typeDefinition.name)) {
+            const arrayTables = [];
+
             await this.k.schema.createTable(typeDefinition.name, (t) => {
                 t.increments();
                 for (const property of typeDefinition.properties) {
                     if (isNativeType(property.type)) {
                         const databaseType = typeMapping[property.type];
                         t[databaseType](property.name);
+                    } else if (_.isArray(property.type)) {
+                        arrayTables.push({
+                            tableName: `${typeDefinition.name}_${property.name}`,
+                            type: property.type[0],
+                            parent: typeDefinition.name
+                        });
                     } else {
                         t
                             .integer(property.name)
@@ -177,7 +269,41 @@ module.exports = class DatabaseHandler {
                             .onUpdate('CASCADE');
                     }
                 }
-            })
+            });
+
+            this._createArrayTables(arrayTables);
+        }
+    }
+
+    async _createArrayTables(arrayTables) {
+        for (const arrayTable of arrayTables) {
+            await this._createArrayTable(arrayTable);
+        }
+    }
+
+    async _createArrayTable(arrayTable) {
+        if (!await this.k.schema.hasTable(arrayTable.tableName)) {
+            await this.k.schema.createTable(arrayTable.tableName, (t) => {
+                t.increments();
+                t
+                    .integer(arrayTable.parent)
+                    .references('id')
+                    .inTable(arrayTable.parent)
+                    .onDelete('CASCADE')
+                    .onUpdate('CASCADE');
+
+                if (isNativeType(arrayTable.type)) {
+                    const databaseType = typeMapping[arrayTable.type];
+                    t[databaseType]('value');
+                } else {
+                    t
+                        .integer('value')
+                        .references('id')
+                        .inTable(arrayTable.type.name)
+                        .onDelete('CASCADE')
+                        .onUpdate('CASCADE');
+                }
+            });
         }
     }
 

@@ -102,6 +102,12 @@ class Parser {
         this.token = this._next();
         this._expect(tokenTypes.colon);
         this.token = this._next();
+
+        const property = this.token.type !== tokenTypes.squareOpen ? this._parseSingleType(name) : this._parseArrayType(name);
+        return property;
+    }
+
+    _parseSingleType(name) {
         this._expect(
             tokenTypes.float,
             tokenTypes.integer,
@@ -110,8 +116,32 @@ class Parser {
             tokenTypes.id,
             tokenTypes.date
         );
+
         const property = new Property(name, this.token.value);
         this.token = this._next();
+
+        return property;
+    }
+
+    _parseArrayType(name) {
+        this._expect(tokenTypes.squareOpen);
+        this.token = this._next();
+
+        this._expect(
+            tokenTypes.float,
+            tokenTypes.integer,
+            tokenTypes.string,
+            tokenTypes.boolean,
+            tokenTypes.id,
+            tokenTypes.date
+        );
+
+        const property = new Property(name, [this.token.value]);
+        this.token = this._next();
+
+        this._expect(tokenTypes.squareClose);
+        this.token = this._next();
+
         return property;
     }
 

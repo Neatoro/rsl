@@ -22,6 +22,8 @@ const tokenTypes = {
     id: 'ID',
     curlyOpen: 'CURLY OPEN',
     curlyClose: 'CURLY CLOSE',
+    squareOpen: 'SQUARE OPEN',
+    squareClose: 'SQUARE CLOSE',
     colon: 'COLON',
     string: 'STRING',
     integer: 'INTEGER',
@@ -59,6 +61,16 @@ const tokenMatchers = [
     {
         type: tokenTypes.curlyClose,
         regex: /}/,
+        level: 0
+    },
+    {
+        type: tokenTypes.squareOpen,
+        regex: /\[/,
+        level: 0
+    },
+    {
+        type: tokenTypes.squareClose,
+        regex: /\]/,
         level: 0
     },
     {

@@ -36,9 +36,15 @@ function isDate(value) {
 function validatePropertyTypes(body, typeDefintion) {
     const wrongPropertyTypes = [];
     for (const property of typeDefintion.properties) {
-        const validator = typeValidators[property.type] || _.isInteger;
-        if (!validator(body[property.name])) {
-            wrongPropertyTypes.push(`${property.name} (${property.type})`);
+        if (_.isArray(property.type)) {
+            if (!_.isArray(body[property.name])) {
+                wrongPropertyTypes.push(`${property.name} (Array)`);
+            }
+        } else {
+            const validator = typeValidators[property.type] || _.isInteger;
+            if (!validator(body[property.name])) {
+                wrongPropertyTypes.push(`${property.name} (${property.type})`);
+            }
         }
     }
 
