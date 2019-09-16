@@ -19,8 +19,18 @@ module.exports = function(typeDefinition, databaseHandler) {
     return async function(request, response) {
         const filters = getFilters(request.query);
         const expands = getExpand(request.query);
+
+        const result = await databaseHandler.list({
+            typeDefinition,
+            filters,
+            expands,
+            limit: request.query.limit,
+            offset: request.query.offset
+        });
+
         response.json({
-            [toKebapCase(typeDefinition.name)]: await databaseHandler.list(typeDefinition, filters, expands)
+            done: result.length === 0,
+            [toKebapCase(typeDefinition.name)]: result
         });
     };
 };

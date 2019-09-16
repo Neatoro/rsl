@@ -106,7 +106,7 @@ module.exports = class DatabaseHandler {
         }
     }
 
-    async list(typeDefinition, filters = [], expands = []) {
+    async list({ typeDefinition, filters = [], expands = [], limit = 100, offset = 0}) {
         typeDefinition = this.types[typeDefinition.name];
         const selectFields = [
             `${typeDefinition.name}.id`,
@@ -115,7 +115,16 @@ module.exports = class DatabaseHandler {
                 .map((property) => `${typeDefinition.name}.${property.name}`).value()
         ];
 
-        let baseQuery = this.k(typeDefinition.name).select(selectFields);
+        let baseQuery = this.k(
+            function() {
+                this.select(selectFields)
+                    .from(typeDefinition.name)
+                    .limit(limit)
+                    .offset(offset)
+                    .as(typeDefinition.name)
+            }
+        )
+            .select(selectFields);
 
         const arrayFields = _.filter(typeDefinition.properties, (property) => _.isArray(property.type));
         for (const arrayField of arrayFields) {
@@ -176,7 +185,11 @@ module.exports = class DatabaseHandler {
     }
 
     async get(typeDefinition, id, expands = []) {
-        return await this.list(typeDefinition, [`id=${id}`], expands);
+        return await this.list({
+            typeDefinition,
+            filters: [`id=${id}`],
+            expands
+        });
     }
 
     async insert(typeDefinition, data) {
