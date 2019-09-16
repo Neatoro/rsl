@@ -123,7 +123,7 @@ module.exports = class DatabaseHandler {
         for (const arrayField of arrayFields) {
             baseQuery = baseQuery
                 .select(`${typeDefinition.name}_${arrayField.name}.value as ${arrayField.name}`)
-                .join(
+                .leftOuterJoin(
                     `${typeDefinition.name}_${arrayField.name}`,
                     `${typeDefinition.name}.id`,
                     `${typeDefinition.name}_${arrayField.name}.${typeDefinition.name}`
@@ -162,7 +162,11 @@ module.exports = class DatabaseHandler {
                 return _.reduce(
                     group,
                     (acc, el) => {
-                        _.forEach(keys, (key) => acc[key].push(el[key]));
+                        _.forEach(keys, (key) => {
+                            if (!_.isNil(el[key])) {
+                                acc[key].push(el[key]);
+                            }
+                        });
                         return acc;
                     },
                     { ..._.head(group), ...preparedArrays }
@@ -201,7 +205,9 @@ module.exports = class DatabaseHandler {
                 value: data
             }));
 
-            await this.k(`${typeDefinition.name}_${arrayKey}`).insert(mappedArrayData);
+            if (mappedArrayData.length > 0) {
+                await this.k(`${typeDefinition.name}_${arrayKey}`).insert(mappedArrayData);
+            }
         }
 
         return result;
