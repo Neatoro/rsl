@@ -1,7 +1,6 @@
 const _ = require('lodash');
-const expandedQuery = require('./expandedQuery');
-const filteredQuery = require('./filteredQuery');
 const knex = require('knex');
+const dbList = require('./list');
 const { typeMapping } = require('../util');
 
 function isNativeType(typeName) {
@@ -101,80 +100,23 @@ module.exports = class DatabaseHandler {
 
     async list({ typeDefinition, filters = [], expands = [], limit = 100, offset = 0}) {
         typeDefinition = this.types[typeDefinition.name];
-        const selectFields = [
-            `${typeDefinition.name}.id`,
-            ..._(typeDefinition.properties)
-                .filter((property) => !_.isArray(property.type))
-                .map((property) => `${typeDefinition.name}.${property.name}`).value()
-        ];
 
-        let baseQuery = this.k(
-            function() {
-                this.select(selectFields)
-                    .from(typeDefinition.name)
-                    .limit(limit)
-                    .offset(offset)
-                    .as(typeDefinition.name)
-            }
-        )
-            .select(selectFields);
+        expands = _(expands)
+            .map((expand) => _.find(typeDefinition.properties, { name: expand }))
+            .compact()
+            .filter((expand) => _.isObject(expand.type))
+            .value();
 
-        const arrayFields = _.filter(typeDefinition.properties, (property) => _.isArray(property.type));
-        for (const arrayField of arrayFields) {
-            baseQuery = baseQuery
-                .select(`${typeDefinition.name}_${arrayField.name}.value as ${arrayField.name}`)
-                .leftOuterJoin(
-                    `${typeDefinition.name}_${arrayField.name}`,
-                    `${typeDefinition.name}.id`,
-                    `${typeDefinition.name}_${arrayField.name}.${typeDefinition.name}`
-                );
-        }
-
-        const queryWithExpands = expandedQuery({
-            query: baseQuery,
-            requestedType: typeDefinition,
-            expands
+        const data = await dbList({
+            type: typeDefinition,
+            filters,
+            expands,
+            database: this.k,
+            limit,
+            offset
         });
 
-        const queryWithFilter = filteredQuery({
-            query: queryWithExpands,
-            requestedType: typeDefinition,
-            filters
-        });
-
-        const results = await await queryWithFilter;
-        const transformedResults = _.map(
-            results,
-            (result) => _.reduce(
-                queryWithExpands.transformFunctions,
-                (acc, func) => func(acc),
-                result
-            )
-        );
-
-        const keys = _.map(arrayFields, (field) => field.name);
-        const groupedResults = _.groupBy(transformedResults, 'id');
-
-        const fullResults = _.mapValues(
-            groupedResults,
-            (group) => {
-                const preparedArrays = _.reduce(keys, (acc, el) => ({ ...acc, [el]: [] }), {});
-                return _.reduce(
-                    group,
-                    (acc, el) => {
-                        _.forEach(keys, (key) => {
-                            if (!_.isNil(el[key])) {
-                                acc[key].push(el[key]);
-                            }
-                        });
-                        return acc;
-                    },
-                    { ..._.head(group), ...preparedArrays }
-                );
-            }
-        );
-
-        return _.values(fullResults);
+        return data;
     }
 
     _hasProperty(typeDefinition, property) {
