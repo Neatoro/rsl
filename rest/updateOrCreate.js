@@ -60,8 +60,13 @@ module.exports = function(typeDefintion, databaseFunction) {
     return async function(request, response) {
         const validationResult = isValidRequestBody(request.body, typeDefintion);
         if (_.isUndefined(validationResult)) {
-            const result = await databaseFunction(typeDefintion, request);
-            response.status(201).json({ id: result[0] });
+            try {
+                const result = await databaseFunction(typeDefintion, request);
+                response.status(201).json({ id: result[0] });
+            } catch (e) {
+                console.error(e);
+                response.status(400).json({ error: 'Error during insertation of entity.' });
+            }
         } else {
             response.status(400).json(validationResult);
         }

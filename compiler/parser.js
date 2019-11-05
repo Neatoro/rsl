@@ -27,9 +27,10 @@ class Type {
 
 class Property {
 
-    constructor(name, type) {
+    constructor(name, type, uniq = false) {
         this.name = name;
         this.type = type;
+        this.uniq = uniq;
     }
 
 }
@@ -97,6 +98,11 @@ class Parser {
     }
 
     _parseProperty() {
+        let uniq = false;
+        if (this.token.type === tokenTypes.uniq) {
+            uniq = true;
+            this.token = this._next();
+        }
         this._expect(tokenTypes.id);
         const name = this.token.value;
         this.token = this._next();
@@ -104,6 +110,8 @@ class Parser {
         this.token = this._next();
 
         const property = this.token.type !== tokenTypes.squareOpen ? this._parseSingleType(name) : this._parseArrayType(name);
+        property.uniq = uniq;
+
         return property;
     }
 

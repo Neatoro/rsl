@@ -30,7 +30,8 @@ const tokenTypes = {
     float: 'FLOAT',
     boolean: 'BOOLEAN',
     text: 'TEXT',
-    date: 'DATE'
+    date: 'DATE',
+    uniq: 'UNIQUE'
 };
 
 const tokenMatchers = [
@@ -107,6 +108,11 @@ const tokenMatchers = [
     {
         type: tokenTypes.date,
         regex: /Date/,
+        level: 0
+    },
+    {
+        type: tokenTypes.uniq,
+        regex: /@uniq/,
         level: 0
     }
 ];

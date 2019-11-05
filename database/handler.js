@@ -53,6 +53,7 @@ class PropertyNode {
     constructor(property) {
         this.name = property.name;
         this.type = property.type;
+        this.uniq = property.uniq;
     }
 
 }
@@ -234,6 +235,10 @@ module.exports = class DatabaseHandler {
                     if (isNativeType(property.type)) {
                         const databaseType = typeMapping[property.type];
                         t[databaseType](property.name);
+
+                        if (property.uniq) {
+                            t.unique(property.name);
+                        }
                     } else if (_.isArray(property.type)) {
                         arrayTables.push({
                             tableName: `${typeDefinition.name}_${property.name}`,
