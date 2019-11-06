@@ -2,6 +2,7 @@ const _ = require('lodash');
 const DatabaseHandler = require('./database/handler');
 const express = require('express');
 const { parse } = require('./compiler/parser');
+const restDelete = require('./rest/delete');
 const restGet = require('./rest/get');
 const restList = require('./rest/list');
 const restUpdateOrCreate = require('./rest/updateOrCreate');

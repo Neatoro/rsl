@@ -101,7 +101,6 @@ function validateArray(property, data) {
 async function handleData(databaseHandler, typeDefinition, data) {
     const id = data.id;
 
-    console.log(typeDefinition, typeDefinition.properties);
     for (const property of typeDefinition.properties) {
         if (!isNativeType(property.type) && _.isPlainObject(data[property.name])) {
             const result = await handleData(databaseHandler, property.type, data[property.name]);
