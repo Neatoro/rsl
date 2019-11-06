@@ -1,24 +1,5 @@
 const _ = require('lodash');
-
-function isValidRequestBody(body, typeDefintion) {
-    const errorMissingProperties = findMissingProperties(body, typeDefintion);
-    return errorMissingProperties ? errorMissingProperties : validatePropertyTypes(body, typeDefintion);
-}
-
-function findMissingProperties(body, typeDefintion) {
-    const missingProperties = [];
-    for (const property of typeDefintion.properties) {
-        if (_.isUndefined(body[property.name])) {
-            missingProperties.push(property.name);
-        }
-    }
-
-    if (missingProperties.length > 0) {
-        return {
-            error: `The properties ${missingProperties.join(', ')} are missing, but required!`
-        };
-    }
-}
+const { isNativeType } = require('../util');
 
 const typeValidators = {
     'Integer': _.isInteger,
@@ -34,41 +15,123 @@ function isDate(value) {
     return dateRegex.test(value);
 }
 
-function validatePropertyTypes(body, typeDefintion) {
-    const wrongPropertyTypes = [];
-    for (const property of typeDefintion.properties) {
-        if (_.isArray(property.type)) {
-            if (!_.isArray(body[property.name])) {
-                wrongPropertyTypes.push(`${property.name} (Array)`);
-            }
+async function insert(databaseHandler, typeDefinition, data) {
+    return await databaseHandler.insert(typeDefinition, data)
+}
+
+async function update(databaseHandler, typeDefinition, data, id) {
+    return await databaseHandler.update(typeDefinition, id, data);
+}
+
+function validateRequest(typeDefinition, data) {
+    const validationErrors = [];
+    for (const property of typeDefinition.properties) {
+        if (_.isUndefined(data[property.name])) {
+            validationErrors.push({
+                error: 'MISSING_FIELD',
+                field: property.name
+            });
+        } else if (isNativeType(property.type)) {
+            validationErrors.push(...validateNativeType(property, data));
+        } else if (!_.isArray(property.type)) {
+            validationErrors.push(...validateCustomType(property, data));
         } else {
-            const validator = typeValidators[property.type] || _.isInteger;
-            if (!validator(body[property.name])) {
-                wrongPropertyTypes.push(`${property.name} (${property.type})`);
+            validationErrors.push(...validateArray(property, data));
+        }
+    }
+    return validationErrors;
+}
+
+function validateNativeType(property, data) {
+    if (!typeValidators[property.type](data[property.name])) {
+        return [{
+            error: 'WRONG_TYPE',
+            expectedType: property.type,
+            field: property.name
+        }];
+    }
+    return [];
+}
+
+function validateCustomType(property, data) {
+    if (!_.isInteger(data[property.name]) && !_.isPlainObject(data[property.name])) {
+        return [{
+            error: 'WRONG_TYPE',
+            expectedType: [property.type.name, 'Integer'],
+            field: property.name
+        }];
+    }
+    if (_.isPlainObject(data[property.name])) {
+        return validateRequest(property.type, data[property.name]);
+    }
+
+    return [];
+}
+
+function validateArray(property, data) {
+    const type = property.type[0];
+    if (isNativeType(type)) {
+        return _.flatMap(data[property.name], (datum, index) => {
+            if (!typeValidators[type](datum)) {
+                return [{
+                    error: 'WRONG_TYPE',
+                    expectedType: property.type,
+                    field: `${property.name}[${index}]`
+                }];
+            }
+            return [];
+        });
+    } else {
+        return _.flatMap(data[property.name], (datum, index) => {
+            if (!_.isInteger(datum) && !_.isPlainObject(datum)) {
+                return [{
+                    error: 'WRONG_TYPE',
+                    expectedType: [type.name, 'Integer'],
+                    field: `${property.name}[${index}]`
+                }];
+            }
+            if (_.isPlainObject(datum)) {
+                return validateRequest(type, datum);
+            }
+            return [];
+        });
+    }
+}
+
+async function handleData(databaseHandler, typeDefinition, data) {
+    const id = data.id;
+
+    console.log(typeDefinition, typeDefinition.properties);
+    for (const property of typeDefinition.properties) {
+        if (!isNativeType(property.type) && _.isPlainObject(data[property.name])) {
+            const result = await handleData(databaseHandler, property.type, data[property.name]);
+            data[property.name] = result[0];
+        } else if (_.isArray(property.type) && !isNativeType(property.type[0])) {
+            for (let i = 0; i < data[property.name].length; i++) {
+                if (_.isPlainObject(data[property.name][i])) {
+                    const result = await handleData(databaseHandler, property.type[0], data[property.name][i]);
+                    data[property.name][i] = result[0];
+                }
             }
         }
     }
 
-    if (wrongPropertyTypes.length > 0) {
-        return {
-            error: `The properties ${wrongPropertyTypes.join(', ')} are having the wrong types!`
-        };
+    if (_.isUndefined(id)) {
+        return await insert(databaseHandler, typeDefinition, data);
+    } else {
+        return await update(databaseHandler, typeDefinition, data, id);
     }
 }
 
-module.exports = function(typeDefintion, databaseFunction) {
+module.exports = function(typeDefinition, databaseHandler) {
     return async function(request, response) {
-        const validationResult = isValidRequestBody(request.body, typeDefintion);
-        if (_.isUndefined(validationResult)) {
-            try {
-                const result = await databaseFunction(typeDefintion, request);
-                response.status(201).json({ id: result[0] });
-            } catch (e) {
-                console.error(e);
-                response.status(400).json({ error: 'Error during insertation of entity.' });
-            }
+        const validationResult = validateRequest(typeDefinition, request.body);
+        if (validationResult.length === 0) {
+            request.body.id = _.get(request, 'params.id');
+            const result = await handleData(databaseHandler, typeDefinition, request.body);
+            response.status(201).json({ id: result[0] });
         } else {
-            response.status(400).json(validationResult);
+            response.status(400).json({ errors: validationResult });
         }
     };
 };

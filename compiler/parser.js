@@ -1,3 +1,4 @@
+const _ = require('lodash');
 const { tokenTypes } = require('./tokenizer');
 
 class UnexpectedTokenError extends Error {
@@ -69,7 +70,27 @@ class Parser {
                 throw new UnexpectedTokenError(this.token);
             }
         }
-        return { typeDefinitions, route };
+
+        _.forEach(typeDefinitions, (typeDefinition) => {
+            _.forEach(typeDefinition.properties, (property) => {
+                if (_.isArray(property.type)) {
+                    const fullType = _.find(typeDefinitions, (t) => t.name === property.type[0]);
+                    if (!_.isUndefined(fullType)) {
+                        property.type = [fullType];
+                    }
+                } else {
+                    const fullType = _.find(typeDefinitions, (t) => t.name === property.type);
+                    if (!_.isUndefined(fullType)) {
+                        property.type = fullType;
+                    }
+                }
+            });
+        });
+
+        return {
+            typeDefinitions,
+            route
+        };
     }
 
     _parseType() {

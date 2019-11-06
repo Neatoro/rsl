@@ -2,11 +2,9 @@ const _ = require('lodash');
 const DatabaseHandler = require('./database/handler');
 const express = require('express');
 const { parse } = require('./compiler/parser');
-const restCreate = require('./rest/create');
-const restDelete = require('./rest/delete');
 const restGet = require('./rest/get');
 const restList = require('./rest/list');
-const restUpdate = require('./rest/update');
+const restUpdateOrCreate = require('./rest/updateOrCreate');
 const serviceGet = require('./services/get');
 const serviceList = require('./services/list');
 const { toKebapCase } = require('./util');
@@ -49,10 +47,10 @@ module.exports = class RSL {
         const router = new express.Router();
 
         router.get(`/${serviceName}`, restList(typeDefinition, this));
-        router.post(`/${serviceName}`, restCreate(typeDefinition, this.database));
+        router.post(`/${serviceName}`, restUpdateOrCreate(typeDefinition, this.database));
         router.get(`/${serviceName}/:id`, restGet(typeDefinition, this));
         router.delete(`/${serviceName}/:id`, restDelete(typeDefinition, this.database));
-        router.put(`/${serviceName}/:id`, restUpdate(typeDefinition, this.database));
+        router.put(`/${serviceName}/:id`, restUpdateOrCreate(typeDefinition, this.database));
 
         this._app.use(route, router);
     }

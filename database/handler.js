@@ -88,9 +88,9 @@ module.exports = class DatabaseHandler {
             })
             .forEach((property) => {
                 if (!_.isArray(property.type)) {
-                    property.type = this.types[property.type];
+                    property.type = this.types[property.type.name];
                 } else {
-                    property.type = isNativeType(property.type[0]) ? property.type : [this.types[property.type[0]]];
+                    property.type = isNativeType(property.type[0]) ? property.type : [this.types[property.type[0].name]];
                 }
             });
 
