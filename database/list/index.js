@@ -32,30 +32,7 @@ class ListQueryBuilder {
 
     expand(expands) {
         this._expands = _.concat(this._expands, expands);
-
-        const transformFunctions = _.map(expands, this._createTransformFunction);
-        this._transformFunctions = _.concat(this._transformFunctions, transformFunctions);
-
         return this;
-    }
-
-    _createTransformFunction(expand) {
-        return (data) => _.map(data, (datum) => {
-            datum[expand.name] = {};
-
-            const fields = [
-                'id',
-                ..._.map(expand.type.properties, (p) => p.name)
-            ];
-
-            for (const field of fields) {
-                const name = `${expand.name}_${field}`;
-                datum[expand.name][field] = datum[name];
-                datum = _.omit(datum, name);
-            }
-
-            return datum;
-        });
     }
 
     limit(limit) {
@@ -147,16 +124,21 @@ class ListQueryBuilder {
         return _.reduce(
             this._expands,
             (acc, expand) => {
+                const type = _.isArray(expand.type) ? expand.type[0] : expand.type;
                 const fields = [
                     'id',
-                    ..._.map(expand.type.properties, (p) => p.name)
+                    ..._.map(type.properties, (p) => p.name)
                 ];
 
                 for (const field of fields) {
-                    acc = acc.select(`${expand.type.name}.${field} as ${expand.name}_${field}`);
+                    acc = acc.select(`${type.name}.${field} as ${expand.name}_${field}`);
                 }
 
-                acc.join(expand.type.name, `${typeName}.${expand.name}`, `${expand.type.name}.id`);
+                if (_.isArray(expand.type)) {
+                    acc.join(type.name, `${type.name}.id`, `${typeName}_${expand.name}.value`);
+                } else {
+                    acc.join(type.name, `${typeName}.${expand.name}`, `${type.name}.id`);
+                }
 
                 return acc;
             },
@@ -165,31 +147,47 @@ class ListQueryBuilder {
     }
 
     transformData(data) {
-        const arrayDataFields = _.map(this.arrayFields, (field) => field.name);
+        const groupedData = _.groupBy(data, 'id');
 
-        const combinedArrayData = _(data)
-            .groupBy('id')
-            .values()
-            .map((set) => {
-                const entry = _.reduce(
-                    set,
-                    (acc, entry) => {
-                        const baseObject = _.omit(entry, ...arrayDataFields);
-                        for (const field of arrayDataFields) {
-                            baseObject[field] = _.concat(acc[field] || [], entry[field]);
-                        }
-                        return { ...acc, ...baseObject };
-                    },
-                    {}
-                );
+        const expandedData = _.reduce(this._expands, (acc, expand) => {
+            const type = _.isArray(expand.type) ? expand.type[0] : expand.type;
+            const fields = [
+                'id',
+                ..._.map(type.properties, (p) => p.name)
+            ];
+            const fullFieldNames = _.map(fields, (field) => `${expand.name}_${field}`)
 
-                return entry;
-            })
-            .value();
+            return _(acc)
+                .mapValues((dataset) => {
+                    const mappedData = _.map(dataset, (datum) => ({
+                        ..._.omit(datum, fullFieldNames),
+                        [expand.name]: _.reduce(fields, (acc, field, index) => ({
+                            ...acc,
+                            [field]: datum[fullFieldNames[index]]
+                        }), {})
+                    }));
 
-        const expandedData = _.reduce(this._transformFunctions, (acc, transformFunction) => transformFunction(acc), combinedArrayData);
+                    return mappedData;
+                })
+                .value();
+        }, groupedData);
 
-        return expandedData;
+        const datasets = _.values(expandedData);
+        const type = this.type;
+        const mergedData = _.map(datasets, (dataset) => _.mergeWith({}, ...dataset, (output, input, field) => {
+            const property = _.find(type.properties, (property) => property.name === field);
+
+            if (_.isArray(_.get(property, 'type'))) {
+                if (_.isNil(output)) {
+                    return [input];
+                } else {
+                    return [...output, input];
+                }
+            }
+            return input;
+        }));
+
+        return mergedData;
     }
 
 }
