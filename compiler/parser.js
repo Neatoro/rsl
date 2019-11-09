@@ -28,10 +28,16 @@ class Type {
 
 class Property {
 
-    constructor(name, type, uniq = false) {
+    constructor(name, type) {
         this.name = name;
         this.type = type;
+        this.uniq = false;
+        this.nullable = false;
+    }
+
+    setDecorators({ uniq, nullable }) {
         this.uniq = uniq;
+        this.nullable = nullable;
     }
 
 }
@@ -119,11 +125,8 @@ class Parser {
     }
 
     _parseProperty() {
-        let uniq = false;
-        if (this.token.type === tokenTypes.uniq) {
-            uniq = true;
-            this.token = this._next();
-        }
+        const decorators = this._parseDecorators();
+
         this._expect(tokenTypes.id);
         const name = this.token.value;
         this.token = this._next();
@@ -131,9 +134,29 @@ class Parser {
         this.token = this._next();
 
         const property = this.token.type !== tokenTypes.squareOpen ? this._parseSingleType(name) : this._parseArrayType(name);
-        property.uniq = uniq;
+        property.setDecorators(decorators);
 
         return property;
+    }
+
+    _parseDecorators() {
+        const decorators = {
+            uniq: false,
+            nullable: false
+        };
+
+        while (_.includes([tokenTypes.uniq, tokenTypes.nullable], this.token.type)) {
+            switch (this.token.type) {
+                case tokenTypes.uniq:
+                    decorators.uniq = true;
+                    break;
+                case tokenTypes.nullable:
+                    decorators.nullable = true;
+            }
+            this.token = this._next();
+        }
+
+        return decorators;
     }
 
     _parseSingleType(name) {

@@ -71,7 +71,7 @@ class ListQueryBuilder {
     build() {
         const builderContext = this;
         const query = this.database
-            .select(`${this.type.name}.id`, ..._.map(this.nonArrayFields, (field) => field.name))
+            .select(`${this.type.name}.id`, ..._.map(this.nonArrayFields, (field) => `${this.type.name}.${field.name}`))
             .from(function() {
                 builderContext._buildBaseDataQuery.bind(builderContext)(this);
             });
@@ -99,7 +99,7 @@ class ListQueryBuilder {
         for (const field of this.arrayFields) {
             query = query
                 .select(`${this.type.name}_${field.name}.value as ${field.name}`)
-                .join(
+                .leftOuterJoin(
                     `${this.type.name}_${field.name}`,
                     `${this.type.name}_${field.name}.${this.type.name}`,
                     `${this.type.name}.id`
@@ -135,9 +135,9 @@ class ListQueryBuilder {
                 }
 
                 if (_.isArray(expand.type)) {
-                    acc.join(type.name, `${type.name}.id`, `${typeName}_${expand.name}.value`);
+                    acc.leftOuterJoin(type.name, `${type.name}.id`, `${typeName}_${expand.name}.value`);
                 } else {
-                    acc.join(type.name, `${typeName}.${expand.name}`, `${type.name}.id`);
+                    acc.leftOuterJoin(type.name, `${typeName}.${expand.name}`, `${type.name}.id`);
                 }
 
                 return acc;
@@ -159,13 +159,19 @@ class ListQueryBuilder {
 
             return _(acc)
                 .mapValues((dataset) => {
-                    const mappedData = _.map(dataset, (datum) => ({
-                        ..._.omit(datum, fullFieldNames),
-                        [expand.name]: _.reduce(fields, (acc, field, index) => ({
-                            ...acc,
-                            [field]: datum[fullFieldNames[index]]
-                        }), {})
-                    }));
+                    const mappedData = _.map(dataset, (datum) => {
+                        if (_.isNil(datum[expand.name])) {
+                            return _.omit(datum, ...fullFieldNames);
+                        } else {
+                            return {
+                                ..._.omit(datum, fullFieldNames),
+                                [expand.name]: _.reduce(fields, (acc, field, index) => ({
+                                    ...acc,
+                                    [field]: datum[fullFieldNames[index]]
+                                }), {})
+                            };
+                        }
+                    });
 
                     return mappedData;
                 })
@@ -179,9 +185,9 @@ class ListQueryBuilder {
 
             if (_.isArray(_.get(property, 'type'))) {
                 if (_.isNil(output)) {
-                    return [input];
+                    return _.filter([input], (el) => !_.isNil(el));
                 } else {
-                    return [...output, input];
+                    return _.filter([...output, input], (el) => !_.isNil(el));
                 }
             }
             return input;

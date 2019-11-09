@@ -26,7 +26,11 @@ async function update(databaseHandler, typeDefinition, data, id) {
 function validateRequest(typeDefinition, data) {
     const validationErrors = [];
     for (const property of typeDefinition.properties) {
-        if (_.isUndefined(data[property.name])) {
+        if (_.isNil(data[property.name]) && property.nullable) {
+            continue;
+        }
+
+        if (_.isNil(data[property.name])) {
             validationErrors.push({
                 error: 'MISSING_FIELD',
                 field: property.name

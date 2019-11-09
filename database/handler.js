@@ -54,6 +54,7 @@ class PropertyNode {
         this.name = property.name;
         this.type = property.type;
         this.uniq = property.uniq;
+        this.nullable = property.nullable;
     }
 
 }
@@ -238,6 +239,10 @@ module.exports = class DatabaseHandler {
 
                         if (property.uniq) {
                             t.unique(property.name);
+                        }
+
+                        if (property.nullable) {
+                            t.nullable(property.name);
                         }
                     } else if (_.isArray(property.type)) {
                         arrayTables.push({

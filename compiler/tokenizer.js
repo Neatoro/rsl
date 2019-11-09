@@ -31,7 +31,8 @@ const tokenTypes = {
     boolean: 'BOOLEAN',
     text: 'TEXT',
     date: 'DATE',
-    uniq: 'UNIQUE'
+    uniq: 'UNIQUE',
+    nullable: 'NULLABLE'
 };
 
 const tokenMatchers = [
@@ -113,6 +114,11 @@ const tokenMatchers = [
     {
         type: tokenTypes.uniq,
         regex: /@uniq/,
+        level: 0
+    },
+    {
+        type: tokenTypes.nullable,
+        regex: /@nullable/,
         level: 0
     }
 ];
