@@ -235,14 +235,14 @@ module.exports = class DatabaseHandler {
                 for (const property of typeDefinition.properties) {
                     if (isNativeType(property.type)) {
                         const databaseType = typeMapping[property.type];
-                        t[databaseType](property.name);
+                        const column = t[databaseType](property.name);
 
                         if (property.uniq) {
                             t.unique(property.name);
                         }
 
                         if (property.nullable) {
-                            t.nullable(property.name);
+                            column.nullable();
                         }
                     } else if (_.isArray(property.type)) {
                         arrayTables.push({
